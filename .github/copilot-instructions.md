@@ -29,7 +29,12 @@ BWS_TOKEN_FILE=/path/to/token python3 examples/probe.py
 # fake token file to see the server's token-loading error path instead.
 ```
 
-There is no formal test suite. `examples/probe.py` is the closest thing — add new protocol edge cases there rather than inventing a parallel framework. If a test runner is ever added (pytest, etc.), keep it deps-free or pin in a `requirements-dev.txt` rather than polluting the runtime path.
+There is no formal test suite. Two probes cover the ground truth:
+
+- `examples/probe.py` — drives a real token against the live `bws` CLI. Use for true end-to-end checks when you have a token.
+- `examples/probe-structured.py` — uses `examples/fake-bws/bws` as a stand-in for the `bws` binary, so it runs without a real account. Specifically validates the MCP 2025-06-18 `outputSchema` + `structuredContent` path.
+
+Add new protocol edge cases to whichever probe is closer rather than inventing a parallel framework. If a test runner is ever added (pytest, etc.), keep it deps-free or pin in a `requirements-dev.txt` rather than polluting the runtime path.
 
 ## Architecture (the big picture)
 

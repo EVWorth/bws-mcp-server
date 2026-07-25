@@ -187,8 +187,12 @@ The server is a single Python file with no dependencies. To test locally:
 # Validate it parses
 python3 -m py_compile bws-mcp-server.py
 
-# Probe with a hand-rolled JSON-RPC client
-python3 examples/probe.py
+# Probe against a real token
+BWS_TOKEN_FILE=/path/to/token python3 examples/probe.py
+
+# Probe against a fake bws (no real token needed) — verifies the
+# MCP 2025-06-18 outputSchema + structuredContent path end-to-end
+python3 examples/probe-structured.py
 ```
 
 ## License

@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# Minimal stand-in for the `bws` CLI used by examples/probe-structured.py.
+# Returns predictable JSON for list/get calls and exec's the argv for `run`.
+# Refuses anything else with a non-zero exit so test failures are loud.
+
+set -euo pipefail
+
+FAKE_SECRETS='[{"id":"11111111-1111-1111-1111-111111111111","key":"alpha","projectId":null,"creationDate":"2026-01-01T00:00:00Z","revisionDate":"2026-01-01T00:00:00Z"},{"id":"22222222-2222-2222-2222-222222222222","key":"beta","projectId":null,"creationDate":"2026-01-02T00:00:00Z","revisionDate":"2026-01-02T00:00:00Z"}]'
+FAKE_PROJECTS='[{"id":"33333333-3333-3333-3333-333333333333","name":"opencode"}]'
+FAKE_SECRET='{"id":"11111111-1111-1111-1111-111111111111","key":"alpha","value":"<redacted>","projectId":null,"creationDate":"2026-01-01T00:00:00Z","revisionDate":"2026-01-01T00:00:00Z"}'
+FAKE_PROJECT='{"id":"33333333-3333-3333-3333-333333333333","name":"opencode","creationDate":"2026-01-01T00:00:00Z","revisionDate":"2026-01-01T00:00:00Z"}'
+
+if [[ "${1:-}" == "secret" && "${2:-}" == "list" ]]; then
+    printf '%s\n' "$FAKE_SECRETS"
+    exit 0
+fi
+
+if [[ "${1:-}" == "secret" && "${2:-}" == "get" ]]; then
+    printf '%s\n' "$FAKE_SECRET"
+    exit 0
+fi
+
+if [[ "${1:-}" == "project" && "${2:-}" == "list" ]]; then
+    printf '%s\n' "$FAKE_PROJECTS"
+    exit 0
+fi
+
+if [[ "${1:-}" == "project" && "${2:-}" == "get" ]]; then
+    printf '%s\n' "$FAKE_PROJECT"
+    exit 0
+fi
+
+if [[ "${1:-}" == "run" ]]; then
+    # Strip "run" and any flags up to "--", then exec the rest.
+    shift
+    while [[ $# -gt 0 && "$1" != "--" ]]; do shift; done
+    if [[ $# -gt 0 && "$1" == "--" ]]; then shift; fi
+    exec "$@"
+fi
+
+echo "fake-bws: unsupported invocation: $*" >&2
+exit 2

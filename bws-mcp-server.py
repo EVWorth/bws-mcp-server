@@ -188,6 +188,114 @@ def run_bws(token: str, argv: list[str], *, max_output: int) -> tuple[int, str, 
 # ---------------------------------------------------------------------------
 
 
+# JSON Schema describing the wrapper dict returned by every bws-list /
+# bws-get tool. The `data` field carries the parsed bws JSON output and is
+# only present when the caller asked for format=json AND the parse succeeded;
+# otherwise it's omitted. `output` always carries the raw text in the
+# requested format for clients that need it.
+_LIST_OUTPUT_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "output": {
+            "type": "string",
+            "description": "Raw bws output in the requested format (string-typed for display).",
+        },
+        "format": {
+            "type": "string",
+            "description": "Output format actually used: json, yaml, env, table, tsv, or none.",
+        },
+        "data": {
+            "description": "Parsed bws JSON output. Present only when format=json; absent otherwise. Shape is an array for list calls, an object for get calls.",
+        },
+    },
+    "required": ["output", "format"],
+}
+
+# Per-tool extensions: each metadata tool adds the project/secret id field
+# that it echoes back, plus the typed name for the parsed-data array/object.
+_METADATA_OUTPUT_SCHEMAS: dict[str, dict] = {
+    "bws_secret_list": {
+        "type": "object",
+        "properties": {
+            **_LIST_OUTPUT_SCHEMA["properties"],
+            "project_id": {
+                "type": ["string", "null"],
+                "description": "Project UUID filter that was applied (null when unfiltered).",
+            },
+            "data": {
+                "type": "array",
+                "description": "Parsed array of secret objects.",
+                "items": {"type": "object", "additionalProperties": True},
+            },
+        },
+        "required": ["output", "format"],
+    },
+    "bws_secret_get": {
+        "type": "object",
+        "properties": {
+            **_LIST_OUTPUT_SCHEMA["properties"],
+            "secret_id": {
+                "type": "string",
+                "description": "Secret UUID that was fetched.",
+            },
+            "data": {
+                "type": "object",
+                "description": "Parsed secret object.",
+                "additionalProperties": True,
+            },
+        },
+        "required": ["output", "format", "secret_id"],
+    },
+    "bws_project_list": {
+        "type": "object",
+        "properties": {
+            **_LIST_OUTPUT_SCHEMA["properties"],
+            "data": {
+                "type": "array",
+                "description": "Parsed array of project objects.",
+                "items": {"type": "object", "additionalProperties": True},
+            },
+        },
+        "required": ["output", "format"],
+    },
+    "bws_project_get": {
+        "type": "object",
+        "properties": {
+            **_LIST_OUTPUT_SCHEMA["properties"],
+            "project_id": {
+                "type": "string",
+                "description": "Project UUID that was fetched.",
+            },
+            "data": {
+                "type": "object",
+                "description": "Parsed project object.",
+                "additionalProperties": True,
+            },
+        },
+        "required": ["output", "format", "project_id"],
+    },
+}
+
+# Tools that emit structuredContent alongside their text content.
+# bws_run is intentionally absent — its output is a mix of text blobs
+# (stdout/stderr) and a few typed fields; the text content alone is the
+# most useful form for clients.
+_STRUCTURED_OUTPUT_TOOLS = {
+    "bws_secret_list",
+    "bws_secret_get",
+    "bws_project_list",
+    "bws_project_get",
+}
+
+
+def _try_parse_json(s: str) -> Any | None:
+    """Best-effort JSON parse. Returns None on any failure."""
+    try:
+        return json.loads(s)
+    except (json.JSONDecodeError, ValueError):
+        return None
+
+
 def tool_secret_list(token: str, args: dict) -> dict:
     project_id = _optional_uuid(args.get("project_id"), "project_id")
     output = _output_format(args.get("output"), default="json")
@@ -198,7 +306,12 @@ def tool_secret_list(token: str, args: dict) -> dict:
     rc, out, err = run_bws(token, argv, max_output=int(os.environ.get("BWS_MCP_MAX_OUTPUT_BYTES", DEFAULT_MAX_OUTPUT)))
     if rc != 0:
         raise RuntimeError(f"bws secret list failed (rc={rc}): {err.strip() or 'no stderr'}")
-    return {"output": out, "format": output, "project_id": project_id}
+    payload: dict = {"output": out, "format": output, "project_id": project_id}
+    if output == "json":
+        parsed = _try_parse_json(out)
+        if parsed is not None:
+            payload["data"] = parsed
+    return payload
 
 
 def tool_secret_get(token: str, args: dict) -> dict:
@@ -208,7 +321,12 @@ def tool_secret_get(token: str, args: dict) -> dict:
     rc, out, err = run_bws(token, argv, max_output=int(os.environ.get("BWS_MCP_MAX_OUTPUT_BYTES", DEFAULT_MAX_OUTPUT)))
     if rc != 0:
         raise RuntimeError(f"bws secret get failed (rc={rc}): {err.strip() or 'no stderr'}")
-    return {"output": out, "format": output, "secret_id": secret_id}
+    payload: dict = {"output": out, "format": output, "secret_id": secret_id}
+    if output == "json":
+        parsed = _try_parse_json(out)
+        if parsed is not None:
+            payload["data"] = parsed
+    return payload
 
 
 def tool_project_list(token: str, args: dict) -> dict:
@@ -217,7 +335,12 @@ def tool_project_list(token: str, args: dict) -> dict:
     rc, out, err = run_bws(token, argv, max_output=int(os.environ.get("BWS_MCP_MAX_OUTPUT_BYTES", DEFAULT_MAX_OUTPUT)))
     if rc != 0:
         raise RuntimeError(f"bws project list failed (rc={rc}): {err.strip() or 'no stderr'}")
-    return {"output": out, "format": output}
+    payload: dict = {"output": out, "format": output}
+    if output == "json":
+        parsed = _try_parse_json(out)
+        if parsed is not None:
+            payload["data"] = parsed
+    return payload
 
 
 def tool_project_get(token: str, args: dict) -> dict:
@@ -227,7 +350,12 @@ def tool_project_get(token: str, args: dict) -> dict:
     rc, out, err = run_bws(token, argv, max_output=int(os.environ.get("BWS_MCP_MAX_OUTPUT_BYTES", DEFAULT_MAX_OUTPUT)))
     if rc != 0:
         raise RuntimeError(f"bws project get failed (rc={rc}): {err.strip() or 'no stderr'}")
-    return {"output": out, "format": output, "project_id": project_id}
+    payload: dict = {"output": out, "format": output, "project_id": project_id}
+    if output == "json":
+        parsed = _try_parse_json(out)
+        if parsed is not None:
+            payload["data"] = parsed
+    return payload
 
 
 def tool_run(token: str, args: dict) -> dict:
@@ -297,6 +425,7 @@ TOOLS: list[dict] = [
             },
             "additionalProperties": False,
         },
+        "outputSchema": _METADATA_OUTPUT_SCHEMAS["bws_secret_list"],
     },
     {
         "name": "bws_secret_get",
@@ -325,6 +454,7 @@ TOOLS: list[dict] = [
             "required": ["secret_id"],
             "additionalProperties": False,
         },
+        "outputSchema": _METADATA_OUTPUT_SCHEMAS["bws_secret_get"],
     },
     {
         "name": "bws_project_list",
@@ -346,6 +476,7 @@ TOOLS: list[dict] = [
             },
             "additionalProperties": False,
         },
+        "outputSchema": _METADATA_OUTPUT_SCHEMAS["bws_project_list"],
     },
     {
         "name": "bws_project_get",
@@ -369,6 +500,7 @@ TOOLS: list[dict] = [
             "required": ["project_id"],
             "additionalProperties": False,
         },
+        "outputSchema": _METADATA_OUTPUT_SCHEMAS["bws_project_get"],
     },
     {
         "name": "bws_run",
@@ -474,13 +606,24 @@ def _read_message(stream) -> dict | None:
     return json.loads(stripped.decode("utf-8"))
 
 
-def _tool_result(payload: dict) -> dict:
-    """Wrap a tool return value as an MCP tools/call result."""
+def _tool_result(payload: dict, structured: bool = True) -> dict:
+    """Wrap a tool return value as an MCP tools/call result.
+
+    payload: the dict to render as text content (always emitted).
+    structured: when True (default), also emit the payload as
+        `structuredContent` per MCP 2025-06-18 §tools/call. Tools whose
+        output is a mix of text blobs and a few typed fields (e.g.
+        bws_run) should pass structured=False so clients don't have to
+        ignore noisy text fields inside structuredContent.
+    """
     text = json.dumps(payload, indent=2, ensure_ascii=False, default=str)
-    return {
+    result: dict = {
         "content": [{"type": "text", "text": text}],
         "isError": False,
     }
+    if structured:
+        result["structuredContent"] = payload
+    return result
 
 
 def _tool_error(message: str) -> dict:
@@ -546,7 +689,7 @@ def handle_message(msg: dict, token: str) -> dict | None:
             return _err(msg_id, METHOD_NOT_FOUND, f"unknown tool: {name!r}")
         try:
             result = TOOL_DISPATCH[name](token, arguments)
-            return _ok(msg_id, _tool_result(result))
+            return _ok(msg_id, _tool_result(result, structured=(name in _STRUCTURED_OUTPUT_TOOLS)))
         except ValueError as exc:
             return _ok(msg_id, _tool_error(f"invalid arguments: {exc}"))
         except RuntimeError as exc:
