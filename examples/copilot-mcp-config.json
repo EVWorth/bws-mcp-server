@@ -5,7 +5,7 @@
       "command": "python3",
       "args": ["/home/you/.local/bin/bws-mcp-server.py"],
       "env": {
-        "BWS_TOKEN_FILE": "/home/you/.config/bws-mcp/token"
+        "BWS_TOKEN_FILE": "/home/you/.config/opencode/bws-token"
       },
       "tools": [
         "bws_secret_list",

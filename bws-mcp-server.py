@@ -49,7 +49,7 @@ from typing import Any
 
 SERVER_NAME = "bws-mcp-server"
 SERVER_VERSION = "1.0.0"
-PROTOCOL_VERSION = "2024-11-05"  # MCP protocol version this server targets.
+PROTOCOL_VERSION = "2025-06-18"  # MCP protocol version this server targets.
 
 DEFAULT_TOKEN_FILE = os.path.expanduser("~/.config/opencode/bws-token")
 DEFAULT_MAX_OUTPUT = 256 * 1024
@@ -270,12 +270,18 @@ def tool_run(token: str, args: dict) -> dict:
 TOOLS: list[dict] = [
     {
         "name": "bws_secret_list",
+        "title": "List secrets",
         "description": (
             "List secrets stored in Bitwarden Secrets Manager, optionally "
             "filtered by a project UUID. Returns metadata only (id, key, "
             "project, creation dates); never the secret value. Use this to "
             "discover what secrets are available before fetching."
         ),
+        "annotations": {
+            "readOnlyHint": True,
+            "idempotentHint": True,
+            "openWorldHint": True,
+        },
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -294,12 +300,18 @@ TOOLS: list[dict] = [
     },
     {
         "name": "bws_secret_get",
+        "title": "Get a secret",
         "description": (
             "Fetch a single secret from Bitwarden Secrets Manager by UUID. "
             "Returns the secret value via bws — handle the result as "
             "sensitive. Prefer fetching only when the value is immediately "
             "needed, and never echo it back to the user in plain text."
         ),
+        "annotations": {
+            "readOnlyHint": True,
+            "idempotentHint": True,
+            "openWorldHint": True,
+        },
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -316,7 +328,13 @@ TOOLS: list[dict] = [
     },
     {
         "name": "bws_project_list",
+        "title": "List projects",
         "description": "List projects in the Bitwarden Secrets Manager.",
+        "annotations": {
+            "readOnlyHint": True,
+            "idempotentHint": True,
+            "openWorldHint": True,
+        },
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -331,7 +349,13 @@ TOOLS: list[dict] = [
     },
     {
         "name": "bws_project_get",
+        "title": "Get a project",
         "description": "Fetch a single project by UUID.",
+        "annotations": {
+            "readOnlyHint": True,
+            "idempotentHint": True,
+            "openWorldHint": True,
+        },
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -348,6 +372,7 @@ TOOLS: list[dict] = [
     },
     {
         "name": "bws_run",
+        "title": "Run a command with secrets",
         "description": (
             "Run an arbitrary command with secrets from a Secrets Manager "
             "project injected as environment variables. The secret values "
@@ -356,6 +381,12 @@ TOOLS: list[dict] = [
             "credentials in their environment (e.g. docker login, curl with "
             "an API key, deploy scripts)."
         ),
+        "annotations": {
+            "readOnlyHint": False,
+            "destructiveHint": True,
+            "idempotentHint": False,
+            "openWorldHint": True,
+        },
         "inputSchema": {
             "type": "object",
             "properties": {

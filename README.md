@@ -51,9 +51,9 @@ bws --version
 ### 3. Store the token
 
 ```bash
-mkdir -p ~/.config/bws-mcp
-echo '0.xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' > ~/.config/bws-mcp/token
-chmod 600 ~/.config/bws-mcp/token
+mkdir -p ~/.config/opencode
+echo '0.xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' > ~/.config/opencode/bws-token
+chmod 600 ~/.config/opencode/bws-token
 ```
 
 ### 4. Install the server
@@ -68,7 +68,34 @@ Or just copy `bws-mcp-server.py` from this repo somewhere on `PATH`.
 
 ## Configuration
 
-### GitHub Copilot CLI
+### Install via APM (recommended)
+
+This repo is published as an [APM](https://microsoft.github.io/apm/) package
+(`io.github.evworth/bws-mcp-server`). Once `bws-mcp-server.py` is on `PATH`
+and a token file exists at `~/.config/opencode/bws-token`, you can register
+the MCP server in every detected harness with one command:
+
+```bash
+apm install io.github.evworth/bws-mcp-server
+```
+
+APM writes the server entry (and ships the `bws-secret-handling` skill) into
+the right config file for each harness it detects: GitHub Copilot CLI, VS
+Code, Claude Code, opencode, Cursor, Codex, Gemini, Kiro, Windsurf, and
+JetBrains Copilot. The server is registered as `bws` with a default
+`tools` allowlist of read-only metadata calls; `bws_secret_get` and `bws_run`
+are deliberately omitted and require explicit per-call opt-in.
+
+For GitHub-specific config see [`.github/copilot-instructions.md`](.github/copilot-instructions.md).
+For ad-hoc clients see [`examples/probe.py`](examples/probe.py).
+
+### Manual configuration
+
+If you don't use APM, copy one of the snippets below into your harness's
+MCP config. Use a stable path for `BWS_TOKEN_FILE` — the server's default
+is `~/.config/opencode/bws-token`.
+
+#### GitHub Copilot CLI
 
 Add to `~/.copilot/mcp-config.json`:
 
@@ -80,7 +107,7 @@ Add to `~/.copilot/mcp-config.json`:
       "command": "python3",
       "args": ["/home/you/.local/bin/bws-mcp-server.py"],
       "env": {
-        "BWS_TOKEN_FILE": "/home/you/.config/bws-mcp/token"
+        "BWS_TOKEN_FILE": "/home/you/.config/opencode/bws-token"
       },
       "tools": ["bws_secret_list", "bws_project_list", "bws_project_get"]
     }
@@ -90,7 +117,7 @@ Add to `~/.copilot/mcp-config.json`:
 
 The `tools` allowlist is intentional — `bws_secret_get` and `bws_run` are gated behind per-session `--allow-tool` so secret values never auto-flow without your approval.
 
-### opencode
+#### opencode
 
 Add to `~/.config/opencode/opencode.json`:
 
@@ -101,14 +128,14 @@ Add to `~/.config/opencode/opencode.json`:
       "type": "local",
       "command": ["python3", "/home/you/.local/bin/bws-mcp-server.py"],
       "environment": {
-        "BWS_TOKEN_FILE": "/home/you/.config/bws-mcp/token"
+        "BWS_TOKEN_FILE": "/home/you/.config/opencode/bws-token"
       }
     }
   }
 }
 ```
 
-### Claude Desktop
+#### Claude Desktop
 
 Add to `claude_desktop_config.json`:
 
@@ -119,7 +146,7 @@ Add to `claude_desktop_config.json`:
       "command": "python3",
       "args": ["/home/you/.local/bin/bws-mcp-server.py"],
       "env": {
-        "BWS_TOKEN_FILE": "/home/you/.config/bws-mcp/token"
+        "BWS_TOKEN_FILE": "/home/you/.config/opencode/bws-token"
       }
     }
   }

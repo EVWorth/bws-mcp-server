@@ -1,0 +1,39 @@
+name: bws-mcp-server
+version: 1.0.0
+description: >
+  Bitwarden Secrets Manager (bws) MCP server. Exposes read-only access to
+  secrets and projects over a machine-account access token, across GitHub
+  Copilot CLI, VS Code, Claude Code, opencode, Cursor, Codex, and Gemini.
+license: MIT
+homepage: https://github.com/EVWorth/bws-mcp-server
+repository: https://github.com/EVWorth/bws-mcp-server
+
+# This package ships one self-defined stdio MCP server and one skill.
+# Consumers install with:
+#   apm install github.com/EVWorth/bws-mcp-server
+# or, once the package is indexed by a registry:
+#   apm install bws-mcp-server
+#
+# APM writes the server entry into every detected harness's MCP config
+# (Copilot CLI, VS Code, Claude, opencode, Cursor, Codex, Gemini, Kiro,
+# Windsurf, JetBrains). The server binary itself is NOT bundled — consumers
+# still need to install bws-mcp-server.py once (see README "Install"
+# section) and place a BWS access token file at BWS_TOKEN_FILE.
+
+dependencies:
+  mcp:
+    - name: bws
+      registry: false
+      transport: stdio
+      command: python3
+      args:
+        - "${HOME}/.local/bin/bws-mcp-server.py"
+      env:
+        BWS_TOKEN_FILE: "${HOME}/.config/opencode/bws-token"
+      # Auto-approved tools — read-only metadata only. bws_secret_get and
+      # bws_run are deliberately NOT in this list; consumers should require
+      # explicit per-session opt-in for those (see SKILL.md).
+      tools:
+        - bws_secret_list
+        - bws_project_list
+        - bws_project_get
