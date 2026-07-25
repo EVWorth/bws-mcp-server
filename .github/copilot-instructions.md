@@ -69,7 +69,9 @@ Three invariants the whole file is built around:
 1. Write the implementation function (signature `(token: str, args: dict) -> dict`).
 2. Append a schema to the `TOOLS` list, mirroring the existing `inputSchema` shape — `additionalProperties: False` everywhere, `enum` for bounded strings, descriptions that mention the sensitivity if the tool returns values.
 3. Add the function to `TOOL_DISPATCH`.
-4. Run `python3 -m py_compile bws-mcp-server.py && BWS_TOKEN_FILE=… python3 examples/probe.py` to confirm it's listed in `tools/list` and behaves end-to-end.
+4. If the tool mutates state, add its name to `_WRITE_TOOLS`. The dispatch site in `handle_message` checks `BWS_MCP_ALLOW_WRITES` before invoking anything in that set.
+5. If the tool returns JSON-parseable content (not text blobs), add its name to `_STRUCTURED_OUTPUT_TOOLS` so `structuredContent` is emitted alongside `content`.
+6. Run `python3 -m py_compile bws-mcp-server.py && BWS_TOKEN_FILE=… python3 examples/probe-structured.py` to confirm it's listed in `tools/list`, gated correctly, and behaves end-to-end.
 
 ### When adding a new bws subcommand
 Read `bws <cmd> --help` carefully — argument style differs by command:
@@ -94,7 +96,7 @@ The MCP wrappers in `tool_secret_list` / `tool_run` build argv with the id as th
 | `BWS_TOKEN_FILE` | `~/.config/opencode/bws-token` | Token file path |
 | `BWS_MCP_DEBUG` | unset | Verbose logging to stderr |
 | `BWS_MCP_MAX_OUTPUT_BYTES` | `262144` | Per-tool output cap |
-| `BWS_MCP_ALLOW_WRITES` | unset | Reserved — write tools are not implemented yet, see comment near top of file |
+| `BWS_MCP_ALLOW_WRITES` | unset | Set to `1` to enable the six write tools (`bws_secret_create/edit/delete`, `bws_project_create/edit/delete`). When unset, write-tool calls return `isError: true`. Even when set, the harness's per-tool allowlist still controls auto-approval. |
 
 Adding a new env var: pick a `BWS_MCP_*` prefix, document it in the README's env-var table, and reference it via `os.environ.get(...)` — no config-file parser layer was added because the surface is too small to need one.
 

@@ -21,6 +21,12 @@ It fills a gap: every other published Bitwarden MCP server (`@bitwarden/mcp-serv
 | `bws_project_list(output?)` | List projects visible to the machine account. |
 | `bws_project_get(project_id, output?)` | Fetch a single project by UUID. |
 | `bws_run(command, project_id?, ...)` | Run an arbitrary command with project secrets injected as environment variables. **The values are not in the tool result.** |
+| `bws_secret_create(key, value, project_id, note?)` | Create a new secret. **Requires `BWS_MCP_ALLOW_WRITES=1`.** |
+| `bws_secret_edit(secret_id, key?, value?, note?, project_id?)` | Edit an existing secret (at least one field required). **Requires `BWS_MCP_ALLOW_WRITES=1`.** |
+| `bws_secret_delete(secret_ids[])` | Delete one or more secrets. **Requires `BWS_MCP_ALLOW_WRITES=1`.** |
+| `bws_project_create(name)` | Create a new project. **Requires `BWS_MCP_ALLOW_WRITES=1`.** |
+| `bws_project_edit(project_id, name)` | Rename a project. **Requires `BWS_MCP_ALLOW_WRITES=1`.** |
+| `bws_project_delete(project_ids[])` | Delete one or more projects. **Requires `BWS_MCP_ALLOW_WRITES=1`.** |
 
 All UUID arguments are validated before being passed to `bws`. Output is capped at 256 KiB by default to keep secrets from flooding the model context.
 
@@ -168,6 +174,19 @@ Add to `claude_desktop_config.json`:
 - **Limit the machine account's project access.** Grant read-only to only the projects the agent actually needs.
 - **Prefer metadata tools.** If you find yourself calling `bws_secret_get` a lot, consider whether the downstream tool can be refactored to receive the value via `bws_run` instead (keeps it out of the model's context).
 - **Never log or echo secret values.** The server returns them as plain text because that's the only thing the LLM can use, but every client should be configured with `tools` allowlists that gate value-returning tools.
+
+### Two-layer gate for write tools
+
+The six write tools — `bws_secret_create`, `bws_secret_edit`, `bws_secret_delete`, `bws_project_create`, `bws_project_edit`, `bws_project_delete` — mutate your secrets manager. They're protected by a two-layer gate; **both** layers are required to actually call them:
+
+1. **Server-side: `BWS_MCP_ALLOW_WRITES=1`.** Without this in the server's environment, every write-tool invocation returns an `isError: true` result explaining the env var. This is the authoritative switch; client-side allowlists alone are insufficient.
+2. **Client-side: harness `tools:` allowlist.** Even when the server gate is open, the harness must not auto-approve write tools. They require per-call opt-in from the user.
+
+Default `apm.yml` only allowlists the three read-only metadata tools (`bws_secret_list`, `bws_project_list`, `bws_project_get`). To opt in to write tools, the user must:
+- Add `BWS_MCP_ALLOW_WRITES=1` to the server's environment (in `apm.yml`'s `env:` block, or in the harness's MCP config `env:` for the server).
+- Add the specific write tools they want to use to the harness's MCP config `tools:` array.
+
+If you're a consumer wondering "why doesn't `bws_secret_create` show up?", check both layers.
 
 ## Why a custom server instead of `@bitwarden/mcp-server`?
 

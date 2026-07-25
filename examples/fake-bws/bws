@@ -10,6 +10,13 @@ FAKE_PROJECTS='[{"id":"33333333-3333-3333-3333-333333333333","name":"opencode"}]
 FAKE_SECRET='{"id":"11111111-1111-1111-1111-111111111111","key":"alpha","value":"<redacted>","projectId":null,"creationDate":"2026-01-01T00:00:00Z","revisionDate":"2026-01-01T00:00:00Z"}'
 FAKE_PROJECT='{"id":"33333333-3333-3333-3333-333333333333","name":"opencode","creationDate":"2026-01-01T00:00:00Z","revisionDate":"2026-01-01T00:00:00Z"}'
 
+# Write-tool responses (echo shape bws would return).
+FAKE_CREATE_SECRET='{"id":"44444444-4444-4444-4444-444444444444","key":"new","value":"<redacted>","projectId":"33333333-3333-3333-3333-333333333333","creationDate":"2026-02-01T00:00:00Z","revisionDate":"2026-02-01T00:00:00Z"}'
+FAKE_EDIT_SECRET='{"id":"11111111-1111-1111-1111-111111111111","key":"alpha","value":"<redacted>","projectId":null,"creationDate":"2026-01-01T00:00:00Z","revisionDate":"2026-02-15T00:00:00Z"}'
+FAKE_DELETE_RESPONSE='{"ids":["11111111-1111-1111-1111-111111111111"],"deleted":1}'
+FAKE_CREATE_PROJECT='{"id":"55555555-5555-5555-5555-555555555555","name":"new-project","creationDate":"2026-02-01T00:00:00Z","revisionDate":"2026-02-01T00:00:00Z"}'
+FAKE_EDIT_PROJECT='{"id":"33333333-3333-3333-3333-333333333333","name":"renamed","creationDate":"2026-01-01T00:00:00Z","revisionDate":"2026-02-15T00:00:00Z"}'
+
 if [[ "${1:-}" == "secret" && "${2:-}" == "list" ]]; then
     printf '%s\n' "$FAKE_SECRETS"
     exit 0
@@ -20,6 +27,21 @@ if [[ "${1:-}" == "secret" && "${2:-}" == "get" ]]; then
     exit 0
 fi
 
+if [[ "${1:-}" == "secret" && "${2:-}" == "create" ]]; then
+    printf '%s\n' "$FAKE_CREATE_SECRET"
+    exit 0
+fi
+
+if [[ "${1:-}" == "secret" && "${2:-}" == "edit" ]]; then
+    printf '%s\n' "$FAKE_EDIT_SECRET"
+    exit 0
+fi
+
+if [[ "${1:-}" == "secret" && "${2:-}" == "delete" ]]; then
+    printf '%s\n' "$FAKE_DELETE_RESPONSE"
+    exit 0
+fi
+
 if [[ "${1:-}" == "project" && "${2:-}" == "list" ]]; then
     printf '%s\n' "$FAKE_PROJECTS"
     exit 0
@@ -27,6 +49,21 @@ fi
 
 if [[ "${1:-}" == "project" && "${2:-}" == "get" ]]; then
     printf '%s\n' "$FAKE_PROJECT"
+    exit 0
+fi
+
+if [[ "${1:-}" == "project" && "${2:-}" == "create" ]]; then
+    printf '%s\n' "$FAKE_CREATE_PROJECT"
+    exit 0
+fi
+
+if [[ "${1:-}" == "project" && "${2:-}" == "edit" ]]; then
+    printf '%s\n' "$FAKE_EDIT_PROJECT"
+    exit 0
+fi
+
+if [[ "${1:-}" == "project" && "${2:-}" == "delete" ]]; then
+    printf '%s\n' "$FAKE_DELETE_RESPONSE"
     exit 0
 fi
 

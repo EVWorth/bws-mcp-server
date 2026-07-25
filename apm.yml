@@ -30,9 +30,12 @@ dependencies:
         - "${HOME}/.local/bin/bws-mcp-server.py"
       env:
         BWS_TOKEN_FILE: "${HOME}/.config/opencode/bws-token"
-      # Auto-approved tools — read-only metadata only. bws_secret_get and
-      # bws_run are deliberately NOT in this list; consumers should require
-      # explicit per-session opt-in for those (see SKILL.md).
+      # Auto-approved tools — read-only metadata only. The write tools
+      # (bws_secret_create/edit/delete, bws_project_create/edit/delete)
+      # and bws_secret_get are deliberately absent from this allowlist:
+      # they're value-returning or mutating, so consumers must require
+      # explicit per-call opt-in at the harness even when the server-side
+      # BWS_MCP_ALLOW_WRITES gate is open. See SKILL.md for the rules.
       tools:
         - bws_secret_list
         - bws_project_list

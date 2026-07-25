@@ -154,6 +154,26 @@ def _command_list(value: Any) -> list[str]:
     return out
 
 
+def _require_uuid_list(value: Any, field: str) -> list[str]:
+    """Validate a non-empty list of UUIDs (used by delete endpoints)."""
+    if not isinstance(value, list) or not value:
+        raise ValueError(f"{field} must be a non-empty list of UUIDs")
+    out: list[str] = []
+    for i, item in enumerate(value):
+        if not isinstance(item, str) or not UUID_RE.match(item):
+            raise ValueError(f"{field}[{i}] must be a UUID; got {item!r}")
+        out.append(item)
+    return out
+
+
+def _at_least_one(args: dict, fields: list[str]) -> None:
+    """Raise ValueError if none of `fields` are set (non-None, non-empty)."""
+    if not any(args.get(f) not in (None, "") for f in fields):
+        raise ValueError(
+            f"at least one of {fields} must be provided; got none"
+        )
+
+
 # ---------------------------------------------------------------------------
 # bws invocation
 # ---------------------------------------------------------------------------
@@ -285,6 +305,92 @@ _STRUCTURED_OUTPUT_TOOLS = {
     "bws_secret_get",
     "bws_project_list",
     "bws_project_get",
+    "bws_secret_create",
+    "bws_secret_edit",
+    "bws_secret_delete",
+    "bws_project_create",
+    "bws_project_edit",
+    "bws_project_delete",
+}
+
+
+# Tools that mutate the user's secrets manager. The server refuses to
+# invoke them at all unless BWS_MCP_ALLOW_WRITES is set in the environment.
+_WRITE_TOOLS = {
+    "bws_secret_create",
+    "bws_secret_edit",
+    "bws_secret_delete",
+    "bws_project_create",
+    "bws_project_edit",
+    "bws_project_delete",
+}
+
+
+# JSON Schemas for the write tools. Same wrapper-dict shape as the metadata
+# tools (output, format, [echoed input field], optional parsed data).
+_WRITE_OUTPUT_SCHEMAS: dict[str, dict] = {
+    "bws_secret_create": {
+        "type": "object",
+        "properties": {
+            "output": {"type": "string"},
+            "format": {"type": "string"},
+            "key": {"type": "string", "description": "Secret key that was created."},
+            "project_id": {"type": "string", "description": "Project UUID the secret was added to."},
+            "data": {"type": "object", "description": "Parsed created-secret object (only when format=json).", "additionalProperties": True},
+        },
+        "required": ["output", "format", "key", "project_id"],
+    },
+    "bws_secret_edit": {
+        "type": "object",
+        "properties": {
+            "output": {"type": "string"},
+            "format": {"type": "string"},
+            "secret_id": {"type": "string"},
+            "data": {"type": "object", "description": "Parsed edited-secret object (only when format=json).", "additionalProperties": True},
+        },
+        "required": ["output", "format", "secret_id"],
+    },
+    "bws_secret_delete": {
+        "type": "object",
+        "properties": {
+            "output": {"type": "string"},
+            "format": {"type": "string"},
+            "secret_ids": {"type": "array", "items": {"type": "string"}},
+            "data": {"description": "Parsed bws delete response (only when format=json)."},
+        },
+        "required": ["output", "format", "secret_ids"],
+    },
+    "bws_project_create": {
+        "type": "object",
+        "properties": {
+            "output": {"type": "string"},
+            "format": {"type": "string"},
+            "name": {"type": "string"},
+            "data": {"type": "object", "description": "Parsed created-project object (only when format=json).", "additionalProperties": True},
+        },
+        "required": ["output", "format", "name"],
+    },
+    "bws_project_edit": {
+        "type": "object",
+        "properties": {
+            "output": {"type": "string"},
+            "format": {"type": "string"},
+            "project_id": {"type": "string"},
+            "name": {"type": "string"},
+            "data": {"type": "object", "description": "Parsed edited-project object (only when format=json).", "additionalProperties": True},
+        },
+        "required": ["output", "format", "project_id", "name"],
+    },
+    "bws_project_delete": {
+        "type": "object",
+        "properties": {
+            "output": {"type": "string"},
+            "format": {"type": "string"},
+            "project_ids": {"type": "array", "items": {"type": "string"}},
+            "data": {"description": "Parsed bws delete response (only when format=json)."},
+        },
+        "required": ["output", "format", "project_ids"],
+    },
 }
 
 
@@ -393,6 +499,157 @@ def tool_run(token: str, args: dict) -> dict:
         # Deliberately omit secret values. bws run injects them as env into
         # the child process; they are not returned to the model.
     }
+
+
+# ---------------------------------------------------------------------------
+# Write tools — gated by BWS_MCP_ALLOW_WRITES (set to 1 to enable).
+# These call bws subcommands that mutate the user's secrets manager. We
+# refuse to invoke them at all unless the env var is set, regardless of
+# any client-side allowlist — defense in depth.
+# ---------------------------------------------------------------------------
+
+
+def tool_secret_create(token: str, args: dict) -> dict:
+    key = _string(args.get("key"), "key", max_len=4096)
+    value = _string(args.get("value"), "value", max_len=4096)
+    project_id = _require_uuid(args.get("project_id"), "project_id")
+    note = args.get("note")
+    output = _output_format(args.get("output"), default="json")
+
+    argv = ["secret", "create", key, value, project_id, "--output", output]
+    if isinstance(note, str) and note:
+        argv += ["--note", _string(note, "note", max_len=4096)]
+
+    rc, out, err = run_bws(
+        token, argv,
+        max_output=int(os.environ.get("BWS_MCP_MAX_OUTPUT_BYTES", DEFAULT_MAX_OUTPUT)),
+    )
+    if rc != 0:
+        raise RuntimeError(f"bws secret create failed (rc={rc}): {err.strip() or 'no stderr'}")
+    payload: dict = {"output": out, "format": output, "key": key, "project_id": project_id}
+    if output == "json":
+        parsed = _try_parse_json(out)
+        if parsed is not None:
+            payload["data"] = parsed
+    return payload
+
+
+def tool_secret_edit(token: str, args: dict) -> dict:
+    secret_id = _require_uuid(args.get("secret_id"), "secret_id")
+    key = args.get("key")
+    value = args.get("value")
+    note = args.get("note")
+    project_id = args.get("project_id")
+    output = _output_format(args.get("output"), default="json")
+
+    _at_least_one(
+        args,
+        ["key", "value", "note", "project_id"],
+    )
+
+    argv = ["secret", "edit", secret_id, "--output", output]
+    if isinstance(key, str) and key:
+        argv += ["--key", _string(key, "key", max_len=4096)]
+    if isinstance(value, str) and value:
+        argv += ["--value", _string(value, "value", max_len=4096)]
+    if isinstance(note, str) and note:
+        argv += ["--note", _string(note, "note", max_len=4096)]
+    if isinstance(project_id, str) and project_id:
+        argv += ["--project-id", _require_uuid(project_id, "project_id")]
+
+    rc, out, err = run_bws(
+        token, argv,
+        max_output=int(os.environ.get("BWS_MCP_MAX_OUTPUT_BYTES", DEFAULT_MAX_OUTPUT)),
+    )
+    if rc != 0:
+        raise RuntimeError(f"bws secret edit failed (rc={rc}): {err.strip() or 'no stderr'}")
+    payload: dict = {"output": out, "format": output, "secret_id": secret_id}
+    if output == "json":
+        parsed = _try_parse_json(out)
+        if parsed is not None:
+            payload["data"] = parsed
+    return payload
+
+
+def tool_secret_delete(token: str, args: dict) -> dict:
+    secret_ids = _require_uuid_list(args.get("secret_ids"), "secret_ids")
+    output = _output_format(args.get("output"), default="json")
+
+    argv = ["secret", "delete", *secret_ids, "--output", output]
+
+    rc, out, err = run_bws(
+        token, argv,
+        max_output=int(os.environ.get("BWS_MCP_MAX_OUTPUT_BYTES", DEFAULT_MAX_OUTPUT)),
+    )
+    if rc != 0:
+        raise RuntimeError(f"bws secret delete failed (rc={rc}): {err.strip() or 'no stderr'}")
+    payload: dict = {"output": out, "format": output, "secret_ids": secret_ids}
+    if output == "json":
+        parsed = _try_parse_json(out)
+        if parsed is not None:
+            payload["data"] = parsed
+    return payload
+
+
+def tool_project_create(token: str, args: dict) -> dict:
+    name = _string(args.get("name"), "name", max_len=4096)
+    output = _output_format(args.get("output"), default="json")
+
+    argv = ["project", "create", name, "--output", output]
+
+    rc, out, err = run_bws(
+        token, argv,
+        max_output=int(os.environ.get("BWS_MCP_MAX_OUTPUT_BYTES", DEFAULT_MAX_OUTPUT)),
+    )
+    if rc != 0:
+        raise RuntimeError(f"bws project create failed (rc={rc}): {err.strip() or 'no stderr'}")
+    payload: dict = {"output": out, "format": output, "name": name}
+    if output == "json":
+        parsed = _try_parse_json(out)
+        if parsed is not None:
+            payload["data"] = parsed
+    return payload
+
+
+def tool_project_edit(token: str, args: dict) -> dict:
+    project_id = _require_uuid(args.get("project_id"), "project_id")
+    name = _string(args.get("name"), "name", max_len=4096)
+    output = _output_format(args.get("output"), default="json")
+
+    argv = ["project", "edit", project_id, "--name", name, "--output", output]
+
+    rc, out, err = run_bws(
+        token, argv,
+        max_output=int(os.environ.get("BWS_MCP_MAX_OUTPUT_BYTES", DEFAULT_MAX_OUTPUT)),
+    )
+    if rc != 0:
+        raise RuntimeError(f"bws project edit failed (rc={rc}): {err.strip() or 'no stderr'}")
+    payload: dict = {"output": out, "format": output, "project_id": project_id, "name": name}
+    if output == "json":
+        parsed = _try_parse_json(out)
+        if parsed is not None:
+            payload["data"] = parsed
+    return payload
+
+
+def tool_project_delete(token: str, args: dict) -> dict:
+    project_ids = _require_uuid_list(args.get("project_ids"), "project_ids")
+    output = _output_format(args.get("output"), default="json")
+
+    argv = ["project", "delete", *project_ids, "--output", output]
+
+    rc, out, err = run_bws(
+        token, argv,
+        max_output=int(os.environ.get("BWS_MCP_MAX_OUTPUT_BYTES", DEFAULT_MAX_OUTPUT)),
+    )
+    if rc != 0:
+        raise RuntimeError(f"bws project delete failed (rc={rc}): {err.strip() or 'no stderr'}")
+    payload: dict = {"output": out, "format": output, "project_ids": project_ids}
+    if output == "json":
+        parsed = _try_parse_json(out)
+        if parsed is not None:
+            payload["data"] = parsed
+    return payload
 
 
 TOOLS: list[dict] = [
@@ -548,6 +805,172 @@ TOOLS: list[dict] = [
             "additionalProperties": False,
         },
     },
+    {
+        "name": "bws_secret_create",
+        "title": "Create a secret",
+        "description": (
+            "Create a new secret in a Secrets Manager project. Requires "
+            "BWS_MCP_ALLOW_WRITES=1 in the server's environment. Prefer "
+            "the user's explicit per-call approval at the harness."
+        ),
+        "annotations": {
+            "readOnlyHint": False,
+            "destructiveHint": False,
+            "idempotentHint": False,
+            "openWorldHint": True,
+        },
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "key": {"type": "string", "description": "Secret key (the env-var-style identifier)."},
+                "value": {"type": "string", "description": "Secret value."},
+                "project_id": {"type": "string", "description": "Project UUID the secret belongs to."},
+                "note": {"type": "string", "description": "Optional human-readable note."},
+                "output": {"type": "string", "enum": sorted(OUTPUT_FORMATS), "description": "Output format. Defaults to json."},
+            },
+            "required": ["key", "value", "project_id"],
+            "additionalProperties": False,
+        },
+        "outputSchema": _WRITE_OUTPUT_SCHEMAS["bws_secret_create"],
+    },
+    {
+        "name": "bws_secret_edit",
+        "title": "Edit a secret",
+        "description": (
+            "Edit an existing secret. Requires BWS_MCP_ALLOW_WRITES=1 in the "
+            "server's environment. At least one of key/value/note/project_id "
+            "must be supplied."
+        ),
+        "annotations": {
+            "readOnlyHint": False,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": True,
+        },
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "secret_id": {"type": "string", "description": "Secret UUID to edit."},
+                "key": {"type": "string", "description": "New secret key."},
+                "value": {"type": "string", "description": "New secret value."},
+                "note": {"type": "string", "description": "New secret note."},
+                "project_id": {"type": "string", "description": "Move secret to this project UUID."},
+                "output": {"type": "string", "enum": sorted(OUTPUT_FORMATS), "description": "Output format. Defaults to json."},
+            },
+            "required": ["secret_id"],
+            "additionalProperties": False,
+        },
+        "outputSchema": _WRITE_OUTPUT_SCHEMAS["bws_secret_edit"],
+    },
+    {
+        "name": "bws_secret_delete",
+        "title": "Delete secrets",
+        "description": (
+            "Delete one or more secrets by UUID. Requires "
+            "BWS_MCP_ALLOW_WRITES=1 in the server's environment. This is a "
+            "destructive, irreversible action — prefer the user's explicit "
+            "per-call approval at the harness."
+        ),
+        "annotations": {
+            "readOnlyHint": False,
+            "destructiveHint": True,
+            "idempotentHint": True,
+            "openWorldHint": True,
+        },
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "secret_ids": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "List of secret UUIDs to delete.",
+                },
+                "output": {"type": "string", "enum": sorted(OUTPUT_FORMATS), "description": "Output format. Defaults to json."},
+            },
+            "required": ["secret_ids"],
+            "additionalProperties": False,
+        },
+        "outputSchema": _WRITE_OUTPUT_SCHEMAS["bws_secret_delete"],
+    },
+    {
+        "name": "bws_project_create",
+        "title": "Create a project",
+        "description": (
+            "Create a new project. Requires BWS_MCP_ALLOW_WRITES=1 in the "
+            "server's environment."
+        ),
+        "annotations": {
+            "readOnlyHint": False,
+            "destructiveHint": False,
+            "idempotentHint": False,
+            "openWorldHint": True,
+        },
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Project name."},
+                "output": {"type": "string", "enum": sorted(OUTPUT_FORMATS), "description": "Output format. Defaults to json."},
+            },
+            "required": ["name"],
+            "additionalProperties": False,
+        },
+        "outputSchema": _WRITE_OUTPUT_SCHEMAS["bws_project_create"],
+    },
+    {
+        "name": "bws_project_edit",
+        "title": "Edit a project",
+        "description": (
+            "Edit an existing project's name. Requires "
+            "BWS_MCP_ALLOW_WRITES=1 in the server's environment."
+        ),
+        "annotations": {
+            "readOnlyHint": False,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": True,
+        },
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "project_id": {"type": "string", "description": "Project UUID to edit."},
+                "name": {"type": "string", "description": "New project name."},
+                "output": {"type": "string", "enum": sorted(OUTPUT_FORMATS), "description": "Output format. Defaults to json."},
+            },
+            "required": ["project_id", "name"],
+            "additionalProperties": False,
+        },
+        "outputSchema": _WRITE_OUTPUT_SCHEMAS["bws_project_edit"],
+    },
+    {
+        "name": "bws_project_delete",
+        "title": "Delete projects",
+        "description": (
+            "Delete one or more projects by UUID. Requires "
+            "BWS_MCP_ALLOW_WRITES=1 in the server's environment. This is a "
+            "destructive, irreversible action — prefer the user's explicit "
+            "per-call approval at the harness."
+        ),
+        "annotations": {
+            "readOnlyHint": False,
+            "destructiveHint": True,
+            "idempotentHint": True,
+            "openWorldHint": True,
+        },
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "project_ids": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "List of project UUIDs to delete.",
+                },
+                "output": {"type": "string", "enum": sorted(OUTPUT_FORMATS), "description": "Output format. Defaults to json."},
+            },
+            "required": ["project_ids"],
+            "additionalProperties": False,
+        },
+        "outputSchema": _WRITE_OUTPUT_SCHEMAS["bws_project_delete"],
+    },
 ]
 
 TOOL_DISPATCH = {
@@ -556,6 +979,12 @@ TOOL_DISPATCH = {
     "bws_project_list": tool_project_list,
     "bws_project_get": tool_project_get,
     "bws_run": tool_run,
+    "bws_secret_create": tool_secret_create,
+    "bws_secret_edit": tool_secret_edit,
+    "bws_secret_delete": tool_secret_delete,
+    "bws_project_create": tool_project_create,
+    "bws_project_edit": tool_project_edit,
+    "bws_project_delete": tool_project_delete,
 }
 
 
@@ -687,6 +1116,18 @@ def handle_message(msg: dict, token: str) -> dict | None:
         arguments = params.get("arguments") or {}
         if not isinstance(name, str) or name not in TOOL_DISPATCH:
             return _err(msg_id, METHOD_NOT_FOUND, f"unknown tool: {name!r}")
+        # Two-layer safety gate for write tools: even if the harness
+        # allowlists them, the server itself refuses to invoke them unless
+        # BWS_MCP_ALLOW_WRITES is set in its own environment.
+        if name in _WRITE_TOOLS and not os.environ.get("BWS_MCP_ALLOW_WRITES"):
+            return _ok(
+                msg_id,
+                _tool_error(
+                    f"{name} is a write tool and is disabled. "
+                    f"Set BWS_MCP_ALLOW_WRITES=1 in the server's environment to enable. "
+                    f"Then require explicit per-call approval at the harness."
+                ),
+            )
         try:
             result = TOOL_DISPATCH[name](token, arguments)
             return _ok(msg_id, _tool_result(result, structured=(name in _STRUCTURED_OUTPUT_TOOLS)))
