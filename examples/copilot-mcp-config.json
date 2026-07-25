@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "bitwarden-secrets": {
+      "type": "stdio",
+      "command": "python3",
+      "args": ["/home/you/.local/bin/bws-mcp-server.py"],
+      "env": {
+        "BWS_TOKEN_FILE": "/home/you/.config/bws-mcp/token"
+      },
+      "tools": [
+        "bws_secret_list",
+        "bws_project_list",
+        "bws_project_get"
+      ]
+    }
+  }
+}

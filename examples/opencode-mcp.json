@@ -1,0 +1,11 @@
+{
+  "mcp": {
+    "bitwarden-secrets": {
+      "type": "local",
+      "command": ["python3", "/home/you/.local/bin/bws-mcp-server.py"],
+      "environment": {
+        "BWS_TOKEN_FILE": "/home/you/.config/bws-mcp/token"
+      }
+    }
+  }
+}

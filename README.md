@@ -1,0 +1,169 @@
+# bws-mcp-server
+
+A small [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server that gives AI agents structured access to the [Bitwarden Secrets Manager](https://bitwarden.com/products/secrets-manager/) CLI (`bws`).
+
+It fills a gap: every other published Bitwarden MCP server (`@bitwarden/mcp-server`, `bitwarden-mcp`, `@icoretech/warden-mcp`) wraps the **Password Manager** CLI (`bw`), which requires an interactive `BW_SESSION` token. This server wraps the **Secrets Manager** CLI (`bws`) and authenticates with a **machine-account access token** — the right primitive for an AI agent that needs API keys, deploy credentials, and other machine-to-machine secrets.
+
+## Features
+
+- **Read-only by default.** Metadata tools (`bws_secret_list`, `bws_project_list`, `bws_project_get`) are designed to be safe to auto-approve.
+- **Sensitive tools opt-in.** `bws_secret_get` and `bws_run` return or use secret values; clients should require explicit per-session approval.
+- **Stdlib only.** Single-file Python implementation, no `pip install`, no Node.js, no SDK dependency.
+- **Reuses your existing `bws` install.** Thin wrapper around the official Bitwarden CLI; inherits all of its security guarantees.
+- **Machine-account auth.** Same threat model as a deploy bot — no human in the loop, no master password.
+
+## Tools
+
+| Tool | Description |
+| --- | --- |
+| `bws_secret_list(project_id?, output?)` | List secrets, optionally filtered by project. Metadata only. |
+| `bws_secret_get(secret_id, output?)` | Fetch a single secret by UUID. **Returns the value.** |
+| `bws_project_list(output?)` | List projects visible to the machine account. |
+| `bws_project_get(project_id, output?)` | Fetch a single project by UUID. |
+| `bws_run(command, project_id?, ...)` | Run an arbitrary command with project secrets injected as environment variables. **The values are not in the tool result.** |
+
+All UUID arguments are validated before being passed to `bws`. Output is capped at 256 KiB by default to keep secrets from flooding the model context.
+
+## Installation
+
+### 1. Install `bws`
+
+```bash
+# Homebrew
+brew install bitwarden-cli
+
+# Or grab the binary from GitHub releases:
+# https://github.com/bitwarden/sdk-sm/releases
+```
+
+Verify:
+```bash
+bws --version
+```
+
+### 2. Get a machine-account access token
+
+1. Open the Bitwarden web vault for your organization
+2. **Secrets Manager** → **Machine accounts** → **New machine account**
+3. Copy the access token (shown once)
+4. Grant the machine account read access to the project(s) you want the agent to see
+
+### 3. Store the token
+
+```bash
+mkdir -p ~/.config/bws-mcp
+echo '0.xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' > ~/.config/bws-mcp/token
+chmod 600 ~/.config/bws-mcp/token
+```
+
+### 4. Install the server
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/EVWorth/bws-mcp-server/main/bws-mcp-server.py \
+  -o ~/.local/bin/bws-mcp-server.py
+chmod 755 ~/.local/bin/bws-mcp-server.py
+```
+
+Or just copy `bws-mcp-server.py` from this repo somewhere on `PATH`.
+
+## Configuration
+
+### GitHub Copilot CLI
+
+Add to `~/.copilot/mcp-config.json`:
+
+```json
+{
+  "mcpServers": {
+    "bitwarden-secrets": {
+      "type": "stdio",
+      "command": "python3",
+      "args": ["/home/you/.local/bin/bws-mcp-server.py"],
+      "env": {
+        "BWS_TOKEN_FILE": "/home/you/.config/bws-mcp/token"
+      },
+      "tools": ["bws_secret_list", "bws_project_list", "bws_project_get"]
+    }
+  }
+}
+```
+
+The `tools` allowlist is intentional — `bws_secret_get` and `bws_run` are gated behind per-session `--allow-tool` so secret values never auto-flow without your approval.
+
+### opencode
+
+Add to `~/.config/opencode/opencode.json`:
+
+```json
+{
+  "mcp": {
+    "bitwarden-secrets": {
+      "type": "local",
+      "command": ["python3", "/home/you/.local/bin/bws-mcp-server.py"],
+      "environment": {
+        "BWS_TOKEN_FILE": "/home/you/.config/bws-mcp/token"
+      }
+    }
+  }
+}
+```
+
+### Claude Desktop
+
+Add to `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "bitwarden-secrets": {
+      "command": "python3",
+      "args": ["/home/you/.local/bin/bws-mcp-server.py"],
+      "env": {
+        "BWS_TOKEN_FILE": "/home/you/.config/bws-mcp/token"
+      }
+    }
+  }
+}
+```
+
+## Environment variables
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `BWS_TOKEN_FILE` | `~/.config/opencode/bws-token` | Path to the machine-account access token file. |
+| `BWS_MCP_DEBUG` | unset | If set, log debug info to stderr. |
+| `BWS_MCP_MAX_OUTPUT_BYTES` | `262144` | Maximum bytes returned per tool call. |
+
+## Safety notes
+
+- **Treat the token file like a private key.** Mode 600, no world-readable backups, no VCS.
+- **Rotate tokens on a schedule.** Bitwarden Secrets Manager tokens do not expire by default; you have to rotate them manually.
+- **Limit the machine account's project access.** Grant read-only to only the projects the agent actually needs.
+- **Prefer metadata tools.** If you find yourself calling `bws_secret_get` a lot, consider whether the downstream tool can be refactored to receive the value via `bws_run` instead (keeps it out of the model's context).
+- **Never log or echo secret values.** The server returns them as plain text because that's the only thing the LLM can use, but every client should be configured with `tools` allowlists that gate value-returning tools.
+
+## Why a custom server instead of `@bitwarden/mcp-server`?
+
+The official `@bitwarden/mcp-server` package is excellent — but it wraps `bw`, the **password manager** CLI. To use it, you must:
+
+1. Log in interactively with your master password
+2. Unlock the vault
+3. Maintain a session token (`BW_SESSION`) that the agent can read
+
+That's the wrong model for a non-interactive agent that runs unattended. A machine-account access token scoped to one or two projects is.
+
+## Development
+
+The server is a single Python file with no dependencies. To test locally:
+
+```bash
+# Validate it parses
+python3 -m py_compile bws-mcp-server.py
+
+# Probe with a hand-rolled JSON-RPC client
+python3 examples/probe.py
+```
+
+## License
+
+MIT — see [LICENSE](LICENSE).

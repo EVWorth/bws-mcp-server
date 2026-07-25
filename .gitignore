@@ -1,0 +1,20 @@
+# Tokens / secrets — never commit
+*.token
+bws-token
+.env
+.env.local
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
