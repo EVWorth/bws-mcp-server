@@ -225,6 +225,19 @@ BWS_TOKEN_FILE=... python3 examples/probe.py
 python3 examples/probe-structured.py
 ```
 
+### Cutting a release
+
+Version lives in two places — `pyproject.toml` `[project].version` and `bws-mcp-server.py` `SERVER_VERSION`. CI fails if they drift. To bump:
+
+```bash
+scripts/bump-version.sh 1.7.0       # updates both files in lockstep
+# Edit CHANGELOG.md to add a [1.7.0] section
+uv lock                             # refresh uv.lock
+uv run python -m tests              # verify
+git commit -am "Bump version to 1.7.0"
+git tag v1.7.0 && git push --tags
+```
+
 ## License
 
 MIT — see [LICENSE](LICENSE).

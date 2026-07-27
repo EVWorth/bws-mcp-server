@@ -54,3 +54,19 @@ jobs:
           BWS_TOKEN_FILE: ${{ env.BWS_TOKEN }}
         run: uv run python examples/probe.py
         continue-on-error: true
+
+      - name: Version sync (pyproject.toml == SERVER_VERSION)
+        # Catches drift between the project metadata and the source
+        # constant. Use scripts/bump-version.sh to update both in
+        # lockstep. Tag-vs-version is intentionally not checked here
+        # because tags are added manually during the release step and
+        # pyproject.toml is naturally ahead during a bump PR.
+        run: |
+          PYPROJECT_VERSION=$(uv run python -c "import tomllib; print(tomllib.loads(open('pyproject.toml').read())['project']['version'])")
+          SERVER_VERSION=$(grep '^SERVER_VERSION = ' bws-mcp-server.py | sed -E 's/.*"([^"]+)".*/\1/')
+          if [ "$PYPROJECT_VERSION" != "$SERVER_VERSION" ]; then
+            echo "FAIL: pyproject.toml version ($PYPROJECT_VERSION) != SERVER_VERSION ($SERVER_VERSION)"
+            echo "Run scripts/bump-version.sh $PYPROJECT_VERSION to align both."
+            exit 1
+          fi
+          echo "OK: $PYPROJECT_VERSION"

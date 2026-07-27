@@ -249,5 +249,48 @@ class TestProtocolConstants(unittest.TestCase):
         )
 
 
+class TestVersionConstantsMatch(unittest.TestCase):
+    """pyproject.toml and SERVER_VERSION must agree. Drift here means
+    consumers see one version while uv-managed tooling sees another —
+    we hit exactly this bug in v1.5.0/v1.6.0. Use scripts/bump-version.sh
+    to update both in lockstep."""
+
+    def _pyproject_version(self):
+        # tomllib is stdlib in 3.11+. Fall back to a regex for 3.10.
+        import re
+        try:
+            import tomllib  # type: ignore[import]
+            with open("pyproject.toml", "rb") as fh:
+                return tomllib.load(fh)["project"]["version"]
+        except ImportError:
+            text = open("pyproject.toml").read()
+            m = re.search(r'^version\s*=\s*"([^"]+)"', text, re.MULTILINE)
+            self.assertIsNotNone(m, "could not find version = in pyproject.toml")
+            return m.group(1)
+
+    def _server_version(self):
+        import re
+        text = open("bws-mcp-server.py").read()
+        m = re.search(r'^SERVER_VERSION\s*=\s*"([^"]+)"', text, re.MULTILINE)
+        self.assertIsNotNone(m, "could not find SERVER_VERSION = in bws-mcp-server.py")
+        return m.group(1)
+
+    def test_pyproject_matches_server_version(self):
+        self.assertEqual(self._pyproject_version(), self._server_version())
+
+    def test_versions_are_semver(self):
+        import re
+        for label, version in (
+            ("pyproject.toml", self._pyproject_version()),
+            ("SERVER_VERSION", self._server_version()),
+        ):
+            with self.subTest(source=label):
+                self.assertRegex(
+                    version,
+                    r"^\d+\.\d+\.\d+(-[a-zA-Z0-9.]+)?$",
+                    f"{label} version {version!r} is not semver",
+                )
+
+
 if __name__ == "__main__":
     unittest.main()
