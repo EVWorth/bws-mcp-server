@@ -104,6 +104,20 @@ are deliberately omitted and require explicit per-call opt-in.
 For GitHub-specific config see [`.github/copilot-instructions.md`](.github/copilot-instructions.md).
 For ad-hoc clients see [`examples/probe.py`](examples/probe.py).
 
+#### User-scope (global) install
+
+Add `-g` to install at user scope so the server is available in every
+session across every repo without per-project setup:
+
+```bash
+apm install -g io.github.evworth/bws-mcp-server
+```
+
+This writes to the global-capable runtime configs (Copilot CLI, Claude
+Code, Codex CLI, Gemini CLI, Kiro, Windsurf, JetBrains Copilot).
+Workspace-only targets (VS Code, opencode, Cursor) are skipped — use
+the per-project `apm install` for those.
+
 ### Manual configuration
 
 If you don't use APM, copy one of the snippets below into your harness's

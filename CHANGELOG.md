@@ -12,6 +12,15 @@ line and add the new release entry when you confirm a smoke test.
 
 ## [Unreleased]
 
+## [1.9.1] - 2026-07-26
+
+### Added
+- README "Install via APM" section gains a "User-scope (global) install"
+  sub-section documenting the `apm install -g` flag and the harnesses
+  it targets.
+
+**Tested against:** `bws` 2.1.0.
+
 ## [1.8.0] - 2026-07-26
 
 ### Added
