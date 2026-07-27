@@ -36,25 +36,16 @@ FAKE_BWS_DIR = HERE / "fake-bws"
 
 
 def frame(payload: dict) -> bytes:
-    body = json.dumps(payload).encode()
-    return f"Content-Length: {len(body)}\r\n\r\n".encode() + body
+    # Newline-delimited JSON — matches bws-mcp-server.py's _encode_message.
+    return json.dumps(payload).encode() + b"\n"
 
 
 def read_frame(stream) -> dict | None:
-    buf = b""
-    while True:
-        ch = stream.read(1)
-        if not ch:
-            return None
-        buf += ch
-        if buf.endswith(b"\r\n\r\n"):
-            break
-    head, _, rest = buf.partition(b"\r\n\r\n")
-    length = int(head.split(b":", 1)[1].strip())
-    body = rest
-    while len(body) < length:
-        body += stream.read(length - len(body))
-    return json.loads(body)
+    # Newline-delimited JSON — see bws-mcp-server.py's _encode_message.
+    line = stream.readline()
+    if not line:
+        return None
+    return json.loads(line)
 
 
 def call(proc, req):
@@ -123,8 +114,8 @@ def run_legacy_assertions(proc: subprocess.Popen) -> None:
         },
     })
     check(
-        init.get("result", {}).get("protocolVersion") == "2025-06-18",
-        "initialize.protocolVersion == 2025-06-18",
+        init.get("result", {}).get("protocolVersion") == "2025-11-25",
+        "initialize.protocolVersion == 2025-11-25",
     )
 
     proc.stdin.write(frame({"jsonrpc": "2.0", "method": "notifications/initialized"}))

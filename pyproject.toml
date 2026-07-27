@@ -1,6 +1,6 @@
 [project]
 name = "bws-mcp-server"
-version = "1.9.2"
+version = "1.9.3"
 description = "Bitwarden Secrets Manager (bws) MCP server. Exposes read-only access to secrets and projects over a machine-account access token."
 readme = "README.md"
 license = { text = "MIT" }

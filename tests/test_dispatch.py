@@ -374,35 +374,39 @@ class TestStructuredContentEmission(unittest.TestCase):
 class TestWireFraming(unittest.TestCase):
     """The server reads and writes Content-Length framed messages."""
 
-    def test_encode_message_includes_content_length_header(self):
+    def test_encode_message_uses_newline_delimited_framing(self):
         payload = {"jsonrpc": "2.0", "id": 1, "result": {}}
-        # Use the same dumps kwargs as _encode_message.
-        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         encoded = bws._encode_message(payload)
-        expected_header = f"Content-Length: {len(body)}\r\n\r\n".encode("ascii")
-        self.assertTrue(encoded.startswith(expected_header))
-        self.assertEqual(encoded[len(expected_header):], body)
+        # Trailing \n so rmcp-style line readers see a complete message.
+        self.assertTrue(encoded.endswith(b"\n"))
+        # No embedded newlines in the body — would break line-delimited readers.
+        body = encoded.rstrip(b"\n")
+        self.assertNotIn(b"\n", body)
+        # Body is valid JSON.
+        self.assertEqual(json.loads(body), payload)
 
     def test_encode_message_handles_unicode(self):
         # ensure_ascii=False in dumps means non-ASCII payloads survive.
         encoded = bws._encode_message({"jsonrpc": "2.0", "id": 1, "result": {"msg": "héllo"}})
-        # Should contain the UTF-8 bytes, not \u-escaped ASCII.
         self.assertIn("héllo".encode("utf-8"), encoded)
+        # And the trailing \n is preserved.
+        self.assertTrue(encoded.endswith(b"\n"))
 
-    def test_read_message_handles_content_length_framing(self):
+    def test_read_message_handles_newline_framing(self):
         import io
 
-        body = json.dumps({"jsonrpc": "2.0", "id": 1, "result": {}}).encode("utf-8")
-        frame = f"Content-Length: {len(body)}\r\n\r\n".encode("ascii") + body
-        stream = io.BytesIO(frame)
+        body = json.dumps({"jsonrpc": "2.0", "id": 1, "result": {}}).encode("utf-8") + b"\n"
+        stream = io.BytesIO(body)
         msg = bws._read_message(stream)
         self.assertEqual(msg, {"jsonrpc": "2.0", "id": 1, "result": {}})
 
-    def test_read_message_handles_lenient_newline_framing(self):
+    def test_read_message_handles_lenient_bare_json(self):
         import io
 
+        # Lenient mode for ad-hoc clients: bare JSON without trailing \n
+        # still parses (the EOF closes the message).
         body = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "ping"}).encode("utf-8")
-        stream = io.BytesIO(body + b"\n")
+        stream = io.BytesIO(body)
         msg = bws._read_message(stream)
         self.assertEqual(msg, {"jsonrpc": "2.0", "id": 1, "method": "ping"})
 

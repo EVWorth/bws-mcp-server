@@ -12,6 +12,33 @@ line and add the new release entry when you confirm a smoke test.
 
 ## [Unreleased]
 
+## [1.9.3] - 2026-07-26
+
+### Fixed
+- **Stdio framing switched from Content-Length to newline-delimited JSON.**
+  v1.9.2 bumped `PROTOCOL_VERSION` to `2025-11-25` but the actual root
+  cause of the connect failure was deeper: the server emitted LSP-style
+  `Content-Length: N\r\n\r\n{json}\n` framing, while the official Rust
+  MCP SDK (`rmcp`, used by GitHub Copilot CLI 1.0.75+) reads stdout
+  `\n`-delimited. The body had no trailing `\n` after the JSON, so
+  rmcp hung waiting for a message terminator and the 60-second
+  initialize-handshake timeout fired, surfacing as "MCP server 'bws'
+  is taking longer than expected to connect."
+
+  Newline-delimited JSON (one message per line, terminated by `\n`,
+  no internal newlines via `separators=(",", ":")`) is also a valid
+  framing per the MCP spec and parses correctly under both modes.
+
+  Updated:
+  - `bws-mcp-server.py::_encode_message()` — emit `\n`-terminated JSON
+  - `examples/probe.py::frame()` and `read_frame()` — match new framing
+  - `examples/probe-structured.py::frame()` and `read_frame()` — match
+  - `tests/test_dispatch.py::TestWireFraming` — replace Content-Length
+    tests with newline-delimited tests
+  - `examples/probe-structured.py` — pin to `2025-11-25` (was `2025-06-18`)
+
+**Tested against:** `bws` 2.1.0.
+
 ## [1.9.2] - 2026-07-26
 
 ### Fixed

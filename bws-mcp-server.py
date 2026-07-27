@@ -48,7 +48,7 @@ from typing import Any
 # ---------------------------------------------------------------------------
 
 SERVER_NAME = "bws-mcp-server"
-SERVER_VERSION = "1.9.2"
+SERVER_VERSION = "1.9.3"
 PROTOCOL_VERSION = "2025-11-25"  # MCP protocol version this server targets.
 
 DEFAULT_TOKEN_FILE = os.path.expanduser("~/.config/opencode/bws-token")
@@ -994,9 +994,21 @@ TOOL_DISPATCH = {
 
 
 def _encode_message(payload: dict) -> bytes:
-    body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-    header = f"Content-Length: {len(body)}\r\n\r\n".encode("ascii")
-    return header + body
+    """Encode a JSON-RPC message as newline-delimited JSON.
+
+    The MCP spec allows two framing modes for stdio:
+    - LSP-style Content-Length headers
+    - newline-delimited JSON (one message per line, terminated by `\\n`)
+
+    We use the latter because the official Rust SDK (rmcp, used by GitHub
+    Copilot CLI 1.0.75+) reads stdout `\\n`-delimited and would hang
+    forever waiting for a `\\n` after our Content-Length-framed body —
+    surfacing to the user as "MCP server X is taking longer than expected
+    to connect" after the 60s initialize-handshake timeout. Newline-
+    delimited JSON parses correctly under both framing modes.
+    """
+    body = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8") + b"\n"
+    return body
 
 
 def _read_message(stream) -> dict | None:
