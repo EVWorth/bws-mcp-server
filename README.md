@@ -1,5 +1,8 @@
 # bws-mcp-server
 
+[![CI](https://github.com/EVWorth/bws-mcp-server/actions/workflows/ci.yml/badge.svg)](https://github.com/EVWorth/bws-mcp-server/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 A small [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server that gives AI agents structured access to the [Bitwarden Secrets Manager](https://bitwarden.com/products/secrets-manager/) CLI (`bws`).
 
 It fills a gap: every other published Bitwarden MCP server (`@bitwarden/mcp-server`, `bitwarden-mcp`, `@icoretech/warden-mcp`) wraps the **Password Manager** CLI (`bw`), which requires an interactive `BW_SESSION` token. This server wraps the **Secrets Manager** CLI (`bws`) and authenticates with a **machine-account access token** — the right primitive for an AI agent that needs API keys, deploy credentials, and other machine-to-machine secrets.

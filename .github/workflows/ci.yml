@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel in-flight runs for the same branch on new pushes; keeps the
+# queue moving when contributors push frequently.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          # Pinning uv version avoids surprise breakage when a new uv
+          # release changes lockfile format. Bump deliberately.
+          version: "0.11.15"
+
+      - name: Sync dependencies
+        # Reads pyproject.toml + uv.lock; creates .venv pinned to
+        # CPython 3.11. uv-managed, no system Python touched.
+        run: uv sync
+
+      - name: Validate server parses
+        run: uv run python -m py_compile bws-mcp-server.py
+
+      - name: Run unit + dispatch test suite
+        run: uv run python -m tests
+
+      - name: Run self-contained probe (gate-closed + gate-open)
+        # examples/probe-structured.py uses examples/fake-bws/bws as a
+        # stand-in for the real CLI; no token required. Verifies
+        # outputSchema + structuredContent + BWS_MCP_ALLOW_WRITES gate.
+        run: uv run python examples/probe-structured.py
+
+      - name: Optional real-token regression
+        # Only runs when BWS_TOKEN is provided as a CI secret. Skips
+        # silently otherwise so PRs from forks don't fail.
+        if: ${{ env.BWS_TOKEN != '' }}
+        env:
+          BWS_TOKEN_FILE: ${{ env.BWS_TOKEN }}
+        run: uv run python examples/probe.py
+        continue-on-error: true
