@@ -18,18 +18,27 @@ The rest of this file describes *current in-repo conventions*. Use it as a start
 
 ## Validate and run
 
+The repo uses [uv](https://docs.astral.sh/uv/) for reproducible dev environments. `uv sync` reads `pyproject.toml` + `uv.lock` and creates `.venv/` pinned to CPython 3.11.
+
 ```bash
-# Syntax check
-python3 -m py_compile bws-mcp-server.py
-
-# End-to-end probe against a real token (drives JSON-RPC over stdio)
-BWS_TOKEN_FILE=/path/to/token python3 examples/probe.py
-
-# Smoke test against a stub bws: not built in. Use examples/probe.py with a
-# fake token file to see the server's token-loading error path instead.
+uv sync                                       # create .venv (one-time)
+uv run python -m py_compile bws-mcp-server.py # syntax check
+uv run python -m tests                        # 78 unit + dispatch tests
+BWS_TOKEN_FILE=~/.config/opencode/bws-token \
+  uv run python examples/probe.py             # end-to-end with real token
+uv run python examples/probe-structured.py    # end-to-end with fake-bws shim
 ```
 
-There is a stdlib `unittest` test suite at `tests/` — run with `python3 -m tests` from the repo root. Two probes cover integration end-to-end:
+Without uv (uses system Python):
+
+```bash
+python3 -m py_compile bws-mcp-server.py
+python3 -m tests
+BWS_TOKEN_FILE=... python3 examples/probe.py
+python3 examples/probe-structured.py
+```
+
+There is a stdlib `unittest` test suite at `tests/` — run with `uv run python -m tests` from the repo root. Two probes cover integration end-to-end:
 
 - `examples/probe.py` — drives a real token against the live `bws` CLI. Use for true end-to-end checks when you have a token.
 - `examples/probe-structured.py` — uses `examples/fake-bws/bws` as a stand-in for the `bws` binary, so it runs without a real account. Specifically validates the MCP 2025-06-18 `outputSchema` + `structuredContent` path.

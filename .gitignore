@@ -7,13 +7,15 @@ bws-token
 # Python
 __pycache__/
 *.pyc
+*.pyo
+
+# uv (dev environment)
+.venv/
 
 # APM (Agent Package Manager) artifacts
 apm_modules/
 apm.lock.yaml
 .apm/
-*.pyo
-.venv/
 
 # OS
 .DS_Store

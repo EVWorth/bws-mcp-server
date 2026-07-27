@@ -1,0 +1,41 @@
+[project]
+name = "bws-mcp-server"
+version = "1.4.0"
+description = "Bitwarden Secrets Manager (bws) MCP server. Exposes read-only access to secrets and projects over a machine-account access token."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+keywords = [
+    "mcp",
+    "model-context-protocol",
+    "bitwarden",
+    "secrets-manager",
+    "agent",
+    "llm",
+]
+authors = [
+    { name = "EVWorth" },
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Console",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+    "Topic :: System :: Systems Administration :: Authentication/Directory",
+]
+
+# This project ships a single stdlib Python file — no runtime deps.
+# Runtime requires Python >= 3.10 (uses PEP 604 union syntax `X | None`
+# and other 3.10+ stdlib features). Tested against 3.10–3.14.
+# `package = false` below means uv treats this as an application project,
+# not a distribution: no wheel/sdist, just dev tooling + metadata.
+
+[tool.uv]
+package = false

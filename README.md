@@ -200,20 +200,25 @@ That's the wrong model for a non-interactive agent that runs unattended. A machi
 
 ## Development
 
-The server is a single Python file with no dependencies. To test locally:
+The server is a single Python file with no dependencies. To set up a dev environment with [uv](https://docs.astral.sh/uv/):
 
 ```bash
-# Validate it parses
+# One-time: install uv (https://docs.astral.sh/uv/#installation)
+# Then from the repo root:
+uv sync                                       # create .venv with the locked Python (3.11)
+uv run python -m py_compile bws-mcp-server.py # validate it parses
+uv run python -m tests                        # 78 unit + dispatch tests
+BWS_TOKEN_FILE=~/.config/opencode/bws-token \
+  uv run python examples/probe.py             # probe with a real token
+uv run python examples/probe-structured.py    # probe with the fake-bws shim
+```
+
+`uv sync` is hermetic — it reads `pyproject.toml` and `uv.lock` and creates `.venv/` pinned to CPython 3.11. No system Python is touched. Without uv:
+
+```bash
 python3 -m py_compile bws-mcp-server.py
-
-# Run the unit + dispatch test suite (stdlib unittest, no extra deps)
 python3 -m tests
-
-# Probe against a real token
-BWS_TOKEN_FILE=/path/to/token python3 examples/probe.py
-
-# Probe against a fake bws (no real token needed) — verifies the
-# MCP 2025-06-18 outputSchema + structuredContent path end-to-end
+BWS_TOKEN_FILE=... python3 examples/probe.py
 python3 examples/probe-structured.py
 ```
 

@@ -48,7 +48,7 @@ from typing import Any
 # ---------------------------------------------------------------------------
 
 SERVER_NAME = "bws-mcp-server"
-SERVER_VERSION = "1.0.0"
+SERVER_VERSION = "1.5.0"
 PROTOCOL_VERSION = "2025-06-18"  # MCP protocol version this server targets.
 
 DEFAULT_TOKEN_FILE = os.path.expanduser("~/.config/opencode/bws-token")
