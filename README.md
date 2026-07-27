@@ -206,6 +206,9 @@ The server is a single Python file with no dependencies. To test locally:
 # Validate it parses
 python3 -m py_compile bws-mcp-server.py
 
+# Run the unit + dispatch test suite (stdlib unittest, no extra deps)
+python3 -m tests
+
 # Probe against a real token
 BWS_TOKEN_FILE=/path/to/token python3 examples/probe.py
 

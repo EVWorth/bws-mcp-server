@@ -29,12 +29,20 @@ BWS_TOKEN_FILE=/path/to/token python3 examples/probe.py
 # fake token file to see the server's token-loading error path instead.
 ```
 
-There is no formal test suite. Two probes cover the ground truth:
+There is a stdlib `unittest` test suite at `tests/` — run with `python3 -m tests` from the repo root. Two probes cover integration end-to-end:
 
 - `examples/probe.py` — drives a real token against the live `bws` CLI. Use for true end-to-end checks when you have a token.
 - `examples/probe-structured.py` — uses `examples/fake-bws/bws` as a stand-in for the `bws` binary, so it runs without a real account. Specifically validates the MCP 2025-06-18 `outputSchema` + `structuredContent` path.
 
-Add new protocol edge cases to whichever probe is closer rather than inventing a parallel framework. If a test runner is ever added (pytest, etc.), keep it deps-free or pin in a `requirements-dev.txt` rather than polluting the runtime path.
+The `tests/` suite covers:
+
+- Argument-validation helpers (`_require_uuid`, `_optional_uuid`, `_output_format`, `_bool`, `_string`, `_command_list`, `_require_uuid_list`, `_at_least_one`, `_try_parse_json`).
+- Tool-dispatch invariants: TOOLS ↔ TOOL_DISPATCH consistency, every `inputSchema` has `additionalProperties: False`, every metadata + write tool declares `outputSchema`, `bws_run` does not.
+- JSON-RPC plumbing: error codes (-32700 / -32600 / -32601 / -32602 / -32603), Content-Length framing round-trip, lenient newline fallback, notifications return None.
+- Tool-call validation: malformed args → `isError: true` (tool error); unknown tool → JSON-RPC error.
+- Write-tool gate: every write tool returns `isError: true` mentioning `BWS_MCP_ALLOW_WRITES` when the env var is unset.
+
+Add new protocol edge cases to whichever probe is closer, or to a new test class in `tests/`. If a heavier test runner is ever added (pytest, etc.), keep it deps-free or pin in a `requirements-dev.txt` rather than polluting the runtime path.
 
 ## Architecture (the big picture)
 
