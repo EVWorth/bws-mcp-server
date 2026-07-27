@@ -233,7 +233,7 @@ class TestProtocolConstants(unittest.TestCase):
     def test_protocol_version_is_current(self):
         # The MCP spec evolves; we pin the announced version. If you bump
         # the protocol version, update this assertion to match.
-        self.assertEqual(bws.PROTOCOL_VERSION, "2025-06-18")
+        self.assertEqual(bws.PROTOCOL_VERSION, "2025-11-25")
 
     def test_error_codes_match_json_rpc_2_0(self):
         self.assertEqual(bws.PARSE_ERROR, -32700)

@@ -12,6 +12,19 @@ line and add the new release entry when you confirm a smoke test.
 
 ## [Unreleased]
 
+## [1.9.2] - 2026-07-26
+
+### Fixed
+- `PROTOCOL_VERSION` bumped from `2025-06-18` to `2025-11-25`. The
+  MCP spec had advanced past our announced version, and Copilot CLI
+  1.0.75 ships on `2025-11-25`. Per the spec, "if the client cannot
+  support this version, it MUST disconnect" — older-version servers
+  get refused at the initialize handshake (60-second timeout, surfaced
+  to the user as "MCP server X is taking longer than expected to
+  connect"). Bumping resolves the connect failure.
+
+**Tested against:** `bws` 2.1.0.
+
 ## [1.9.1] - 2026-07-26
 
 ### Added

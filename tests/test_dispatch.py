@@ -183,7 +183,7 @@ class TestHandleMessageProtocol(unittest.TestCase):
             "id": msg_id,
             "method": "initialize",
             "params": {
-                "protocolVersion": "2025-06-18",
+                "protocolVersion": "2025-11-25",
                 "capabilities": {},
                 "clientInfo": {"name": "test", "version": "0.0.0"},
             },
@@ -191,7 +191,7 @@ class TestHandleMessageProtocol(unittest.TestCase):
 
     def test_initialize_returns_protocol_version(self):
         resp = self._initialize()
-        self.assertEqual(resp["result"]["protocolVersion"], "2025-06-18")
+        self.assertEqual(resp["result"]["protocolVersion"], "2025-11-25")
         self.assertEqual(resp["result"]["serverInfo"]["name"], "bws-mcp-server")
 
     def test_unknown_method_returns_method_not_found(self):
