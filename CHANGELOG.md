@@ -5,7 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+**Compatibility line.** Every release entry below records the `bws`
+CLI version it was tested against. New `bws` releases don't
+auto-update this; bump the version in the README's "Tested against"
+line and add the new release entry when you confirm a smoke test.
+
 ## [Unreleased]
+
+## [1.8.0] - 2026-07-26
+
+### Added
+- `docs/apm-install-verification.md` capturing the result of running
+  `apm install github.com/EVWorth/bws-mcp-server` against Copilot CLI,
+  Claude Code, and OpenCode (apm-cli 0.26.0). All three harnesses
+  produce the expected config; `apm audit` passes; `bws` MCP server
+  appears as `Status: Enabled` in `copilot mcp list`.
+
+**Tested against:** `bws` 2.1.0.
+
+## [1.7.0] - 2026-07-26
+
+### Added
+- `scripts/bump-version.sh X.Y.Z` — single-command version bump.
+- CI version-sync check + unit test that fail if `pyproject.toml`
+  version drifts from `SERVER_VERSION`.
+
+**Tested against:** `bws` 2.1.0.
 
 ## [1.6.0] - 2026-07-26
 
@@ -22,6 +47,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (was `1.4.0` in `pyproject.toml` since the v1.5.0 commit, `1.5.0` in
   `SERVER_VERSION` since the same commit — now both match).
 
+**Tested against:** `bws` 2.1.0.
+
 ## [1.5.0] - 2026-07-26
 
 ### Added
@@ -34,6 +61,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `SERVER_VERSION` bumped from `1.0.0` to `1.5.0`. The source had been
   reporting itself as 1.0.0 to every MCP client since v1.0.0 shipped, while
   we'd actually released through v1.4.0.
+
+**Tested against:** `bws` 2.1.0.
 
 ## [1.4.0] - 2026-07-26
 
@@ -101,3 +130,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the model context.
 - Two hand-rolled probes: `examples/probe.py` (real-token) and the
   Content-Length framing logic in `bws-mcp-server.py` itself.
+
+**Tested against:** `bws` 2.1.0.

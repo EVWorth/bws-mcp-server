@@ -50,6 +50,12 @@ Verify:
 bws --version
 ```
 
+**Tested against `bws` 2.1.0** (released May 2026). Expected to work with
+all `bws` 2.x releases; older 1.x releases may have a different CLI
+shape. When a new `bws` release ships, run `examples/probe.py` against
+it before upgrading — that exercises the full wrapper end-to-end in
+~10 seconds.
+
 ### 2. Get a machine-account access token
 
 1. Open the Bitwarden web vault for your organization
