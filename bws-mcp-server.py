@@ -48,7 +48,7 @@ from typing import Any
 # ---------------------------------------------------------------------------
 
 SERVER_NAME = "bws-mcp-server"
-SERVER_VERSION = "1.9.3"
+SERVER_VERSION = "1.9.4"
 PROTOCOL_VERSION = "2025-11-25"  # MCP protocol version this server targets.
 
 DEFAULT_TOKEN_FILE = os.path.expanduser("~/.config/opencode/bws-token")
@@ -404,19 +404,44 @@ def _try_parse_json(s: str) -> Any | None:
 
 def tool_secret_list(token: str, args: dict) -> dict:
     project_id = _optional_uuid(args.get("project_id"), "project_id")
-    output = _output_format(args.get("output"), default="json")
-    argv = ["secret", "list", "--output", output]
+    requested_output = _output_format(args.get("output"), default="json")
+    # SECURITY: bws_secret_list is on every client's auto-approve allowlist on
+    # the assumption that it returns metadata only (id, key, project, dates)
+    # and never the secret value — the whole reason it doesn't need per-call
+    # consent like bws_secret_get does. `bws secret list` itself does NOT
+    # honor that contract: it includes the full `value` field in every output
+    # format (json, env, table, tsv all leak it). So we always invoke bws
+    # with --output json internally regardless of what the caller asked for,
+    # strip `value` from every secret object ourselves, and rebuild `output`
+    # from the redacted data — never passing the raw bws output through.
+    argv = ["secret", "list", "--output", "json"]
     if project_id:
         # `bws secret list` takes the project id as a positional argument.
         argv.append(project_id)
     rc, out, err = run_bws(token, argv, max_output=int(os.environ.get("BWS_MCP_MAX_OUTPUT_BYTES", DEFAULT_MAX_OUTPUT)))
     if rc != 0:
         raise RuntimeError(f"bws secret list failed (rc={rc}): {err.strip() or 'no stderr'}")
-    payload: dict = {"output": out, "format": output, "project_id": project_id}
-    if output == "json":
-        parsed = _try_parse_json(out)
-        if parsed is not None:
-            payload["data"] = parsed
+    parsed = _try_parse_json(out)
+    if parsed is None:
+        raise RuntimeError("bws secret list returned unparseable JSON; refusing to pass through unredacted output")
+    redacted = [
+        {k: v for k, v in secret.items() if k != "value"} | {"value": "<redacted — use bws_secret_get>"}
+        if isinstance(secret, dict) and "value" in secret
+        else secret
+        for secret in parsed
+    ]
+    payload: dict = {
+        "output": json.dumps(redacted, indent=2),
+        "format": "json",
+        "project_id": project_id,
+        "data": redacted,
+    }
+    if requested_output != "json":
+        payload["note"] = (
+            f"Requested output format '{requested_output}' was overridden to 'json' "
+            "because non-json bws formats (env/table/tsv) embed the secret value "
+            "directly and this tool is metadata-only by contract."
+        )
     return payload
 
 

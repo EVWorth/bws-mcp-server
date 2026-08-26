@@ -349,6 +349,69 @@ class TestWriteToolGate(unittest.TestCase):
         self.assertNotIn("BWS_MCP_ALLOW_WRITES", resp["result"]["content"][0]["text"])
 
 
+class TestSecretListRedaction(unittest.TestCase):
+    """bws_secret_list must never return a secret's `value`, in any format.
+
+    Regression test for a security bug: `bws secret list` itself embeds the
+    full plaintext value in every output format (json/env/table/tsv), but
+    this tool is on every client's auto-approve allowlist specifically
+    because it's supposed to be metadata-only. See CHANGELOG [1.9.4].
+    """
+
+    FAKE_SECRET_VALUE = "sk-super-secret-do-not-leak-me"
+    FAKE_BWS_JSON = json.dumps([
+        {
+            "id": VALID_SECRET,
+            "organizationId": "22222222-2222-2222-2222-222222222222",
+            "projectId": VALID_PROJECT,
+            "key": "example_key",
+            "value": FAKE_SECRET_VALUE,
+            "note": "an example secret",
+            "creationDate": "2026-01-01T00:00:00Z",
+            "revisionDate": "2026-01-01T00:00:00Z",
+        }
+    ])
+
+    def _call_with_fake_bws(self, args):
+        """Call tool_secret_list with run_bws stubbed to return canned JSON."""
+        import unittest.mock as mock
+
+        with mock.patch.object(
+            bws, "run_bws", return_value=(0, self.FAKE_BWS_JSON, "")
+        ) as fake_run_bws:
+            result = bws.tool_secret_list(FAKE_TOKEN, args)
+        return result, fake_run_bws
+
+    def test_value_is_redacted_in_parsed_data(self):
+        result, _ = self._call_with_fake_bws({})
+        self.assertEqual(len(result["data"]), 1)
+        self.assertNotEqual(result["data"][0]["value"], self.FAKE_SECRET_VALUE)
+        self.assertIn("redacted", result["data"][0]["value"])
+        # Every other field should survive untouched.
+        self.assertEqual(result["data"][0]["key"], "example_key")
+
+    def test_value_absent_from_raw_output_string(self):
+        result, _ = self._call_with_fake_bws({})
+        self.assertNotIn(self.FAKE_SECRET_VALUE, result["output"])
+
+    def test_non_json_format_request_still_redacted_and_forced_to_json(self):
+        for requested in ("env", "table", "tsv", "yaml"):
+            with self.subTest(requested=requested):
+                result, fake_run_bws = self._call_with_fake_bws({"output": requested})
+                # The underlying bws invocation must always be asked for
+                # json, regardless of what the caller requested — non-json
+                # formats can't be redacted after the fact.
+                self.assertIn("json", fake_run_bws.call_args.args[1])
+                self.assertEqual(result["format"], "json")
+                self.assertNotIn(self.FAKE_SECRET_VALUE, result["output"])
+                self.assertIn("note", result)
+                self.assertIn(requested, result["note"])
+
+    def test_json_format_request_has_no_override_note(self):
+        result, _ = self._call_with_fake_bws({"output": "json"})
+        self.assertNotIn("note", result)
+
+
 class TestStructuredContentEmission(unittest.TestCase):
     """handle_message emits structuredContent for metadata + write tools."""
 

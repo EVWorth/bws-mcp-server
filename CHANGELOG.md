@@ -12,6 +12,28 @@ line and add the new release entry when you confirm a smoke test.
 
 ## [Unreleased]
 
+## [1.9.4] - 2026-08-26
+
+### Security
+- **`bws_secret_list` leaked full secret values.** The tool is on every
+  client's auto-approve allowlist specifically because its contract says
+  it returns metadata only (id, key, project, dates) and never the value —
+  that's what lets it skip the per-call consent gate `bws_secret_get`
+  requires. In practice it just passed through raw `bws secret list`
+  output, which includes the full `value` field in every output format
+  (`json`, `env`, `table`, `tsv` all embed it). Any client calling this
+  auto-approved tool got every secret's plaintext value with no consent
+  step. Fixed: the tool now always invokes `bws` with `--output json`
+  internally regardless of the requested format, strips `value` from
+  every secret object, and rebuilds the response entirely from the
+  redacted data — no output format can leak a value through this tool
+  anymore. Callers that need an actual value must use `bws_secret_get`,
+  which already requires per-call opt-in.
+- If you've deployed this server anywhere, upgrade immediately — any MCP
+  client with `bws_secret_list` auto-approved (the documented, intended
+  configuration) has been able to read every secret in scope without
+  triggering a consent prompt.
+
 ## [1.9.3] - 2026-07-26
 
 ### Fixed
